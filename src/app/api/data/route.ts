@@ -580,9 +580,9 @@ export async function GET() {
       }
     };
 
-    const filePath = path.join(process.cwd(), "api_response.json");
-    await fs.writeFile(filePath, JSON.stringify(responseData, null, 2));
-    console.log("API response saved to api_response.json");
+    // const filePath = path.join(process.cwd(), "api_response.json");
+    // await fs.writeFile(filePath, JSON.stringify(responseData, null, 2));
+    // console.log("API response saved to api_response.json");
     return NextResponse.json(responseData);
     
   } catch (error) {
