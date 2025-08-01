@@ -1,5 +1,6 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import { useState, useMemo, useEffect } from "react";
 import {
   Box,
@@ -88,7 +89,9 @@ export default function Home() {
   const [searchTerm, setSearchTerm] = useState("");
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+  const [chartTimeframe, setChartTimeframe] = useState<string>("1D");
   const { isOpen, onOpen, onClose } = useDisclosure();
+  const router = useRouter();
 
   // All hooks must be called at the top level, in the same order every time
   const { colorMode, toggleColorMode } = useColorMode();
@@ -201,6 +204,22 @@ export default function Home() {
   const handleRowClick = (asset: Asset) => {
     setSelectedAsset(asset);
     onOpen();
+  };
+
+  const handleLogout = async () => {
+    try {
+      const res = await fetch('/api/auth/logout', {
+        method: 'POST',
+      });
+      if (res.ok) {
+        router.push('/login');
+      } else {
+        console.error('Logout failed');
+        // Optionally, show an error message to the user
+      }
+    } catch (error) {
+      console.error('Error during logout:', error);
+    }
   };
 
   const getTrendDisplay = (trendData: TrendData | undefined) => {
@@ -408,6 +427,9 @@ export default function Home() {
                 variant="ghost"
                 size="md"
               />
+              <Button onClick={handleLogout} variant="ghost" size="md">
+                Logout
+              </Button>
             </HStack>
           </Flex>
         </Container>
@@ -891,8 +913,10 @@ export default function Home() {
                   Object.entries(selectedAsset.supertrend || {})
                     .map(([key, value]) => {
                       if (!value) return null;
+                      // Find the corresponding OHLC entry to get the correct timestamp
+                      const ohlcEntry = selectedAsset.ohlc?.find(d => new Date(d.time).getTime() >= new Date().getTime());
                       return {
-                        time: new Date().toISOString(), // This is a placeholder
+                        time: ohlcEntry ? ohlcEntry.time : new Date().toISOString(),
                         value: value.value,
                         color: value.direction === 'up' ? '#26a69a' : '#ef5350',
                       };
@@ -900,6 +924,8 @@ export default function Home() {
                     .filter(Boolean) as any
                 }
                 indicatorLogic="Buy when the price crosses above the green line. Sell when the price crosses below the red line."
+                timeframe={chartTimeframe}
+                setTimeframe={setChartTimeframe}
               />
             )}
           </ModalBody>

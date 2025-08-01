@@ -42,3 +42,10 @@ next-env.d.ts
 
 # Local test files
 api_response.json
+
+# Local environment variables
+.env.local
+
+.vercel
+
+.env.development.local

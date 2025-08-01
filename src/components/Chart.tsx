@@ -2,14 +2,17 @@
 
 import { createChart, IChartApi, ISeriesApi, UTCTimestamp } from 'lightweight-charts';
 import React, { useEffect, useRef } from 'react';
+import { Button, HStack } from '@chakra-ui/react';
 
 interface ChartProps {
   data: { time: string; open: number; high: number; low: number; close: number }[];
   supertrend: { time: string; value: number; color: string }[];
   indicatorLogic: string;
+  timeframe: string;
+  setTimeframe: (timeframe: string) => void;
 }
 
-const Chart: React.FC<ChartProps> = ({ data, supertrend, indicatorLogic }) => {
+const Chart: React.FC<ChartProps> = ({ data, supertrend, indicatorLogic, timeframe, setTimeframe }) => {
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candlestickSeriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
@@ -24,15 +27,15 @@ const Chart: React.FC<ChartProps> = ({ data, supertrend, indicatorLogic }) => {
       width: chartContainerRef.current.clientWidth,
       height: 500,
       layout: {
-        background: { color: '#000000' },
-        textColor: '#ffffff',
+        background: { color: '#ffffff' },
+        textColor: '#333333',
       },
       grid: {
         vertLines: {
-          color: 'rgba(70, 130, 180, 0.5)',
+          color: '#e1e1e1',
         },
         horzLines: {
-          color: 'rgba(70, 130, 180, 0.5)',
+          color: '#e1e1e1',
         },
       },
     });
@@ -68,16 +71,45 @@ const Chart: React.FC<ChartProps> = ({ data, supertrend, indicatorLogic }) => {
 
   useEffect(() => {
     if (candlestickSeriesRef.current) {
-      const chartData = data
+      console.log(`Timeframe changed to: ${timeframe}. Filtering data.`);
+      const now = new Date();
+      let startDate = new Date();
+
+      switch (timeframe) {
+        case '1M':
+          startDate.setMonth(now.getMonth() - 1);
+          break;
+        case '6M':
+          startDate.setMonth(now.getMonth() - 6);
+          break;
+        case '1Y':
+          startDate.setFullYear(now.getFullYear() - 1);
+          break;
+        case 'ALL':
+        default:
+          startDate = new Date(data[0]?.time || now);
+          break;
+      }
+      
+      console.log(`Filtering data from ${startDate.toISOString()}`);
+
+      const filteredData = data.filter(d => new Date(d.time) >= startDate);
+
+      const chartData = filteredData
         .map((d) => ({
           ...d,
           time: (new Date(d.time).getTime() / 1000) as UTCTimestamp,
         }))
         .sort((a, b) => a.time - b.time)
         .filter((d, i, arr) => i === 0 || d.time !== arr[i - 1].time);
+      
+      console.log(`Setting chart data with ${chartData.length} points.`);
       candlestickSeriesRef.current.setData(chartData);
+      if (chartRef.current) {
+        chartRef.current.timeScale().fitContent();
+      }
     }
-  }, [data]);
+  }, [data, timeframe]);
 
   useEffect(() => {
     if (supertrendSeriesRef.current) {
@@ -96,7 +128,7 @@ const Chart: React.FC<ChartProps> = ({ data, supertrend, indicatorLogic }) => {
 
   if (data.length === 0) {
     return (
-      <div style={{ color: '#ffffff', textAlign: 'center', padding: '20px', backgroundColor: '#1c1c1c', borderRadius: '4px', height: '500px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+      <div style={{ color: '#333333', textAlign: 'center', padding: '20px', backgroundColor: '#f4f4f4', borderRadius: '4px', height: '500px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
         No chart data available.
       </div>
     );
@@ -104,8 +136,24 @@ const Chart: React.FC<ChartProps> = ({ data, supertrend, indicatorLogic }) => {
 
   return (
     <div>
+      <HStack justify="center" mb={4}>
+        {['1M', '6M', '1Y', 'ALL'].map((tf) => (
+          <Button
+            key={tf}
+            size="sm"
+            variant={timeframe === tf ? 'solid' : 'outline'}
+            colorScheme="blue"
+            onClick={() => {
+              console.log(`Timeframe button clicked: ${tf}`);
+              setTimeframe(tf);
+            }}
+          >
+            {tf}
+          </Button>
+        ))}
+      </HStack>
       <div ref={chartContainerRef} style={{ height: '500px', width: '100%' }} />
-      <div style={{ color: '#ffffff', marginTop: '10px', padding: '10px', backgroundColor: '#1c1c1c', borderRadius: '4px' }}>
+      <div style={{ color: '#333333', marginTop: '10px', padding: '10px', backgroundColor: '#f4f4f4', borderRadius: '4px' }}>
         {indicatorLogic}
       </div>
     </div>

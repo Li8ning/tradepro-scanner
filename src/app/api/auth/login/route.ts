@@ -1,35 +1,7 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import fs from 'fs';
-import path from 'path';
-
-const usersFilePath = path.join('/tmp', 'users.json');
-
-interface User {
-  id: number;
-  email: string;
-  password?: string;
-}
-
-async function readUsers(): Promise<User[]> {
-  try {
-    const usersData = await fs.promises.readFile(usersFilePath, 'utf-8');
-    return JSON.parse(usersData);
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      const originalPath = path.join(process.cwd(), 'src', 'lib', 'data', 'users.json');
-      try {
-        const originalData = await fs.promises.readFile(originalPath, 'utf-8');
-        await fs.promises.writeFile(usersFilePath, originalData);
-        return JSON.parse(originalData);
-      } catch (readError) {
-        return [];
-      }
-    }
-    throw error;
-  }
-}
+import { sql } from '@vercel/postgres';
 
 export async function POST(request: Request) {
   try {
@@ -39,20 +11,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Email and password are required' }, { status: 400 });
     }
 
-    const users = await readUsers();
-    const user = users.find((user: User) => user.email === email);
+    const { rows } = await sql`
+      SELECT id, email, password FROM users WHERE email = ${email}
+    `;
 
-    if (!user) {
+    if (rows.length === 0) {
       return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
     }
 
-    const isPasswordValid = await bcrypt.compare(password, user.password!);
+    const user = rows[0];
+    const isPasswordValid = await bcrypt.compare(password, user.password);
 
     if (!isPasswordValid) {
       return NextResponse.json({ message: 'Invalid credentials' }, { status: 401 });
     }
 
-    const token = jwt.sign({ userId: user.id, email: user.email }, 'your-secret-key', {
+    const token = jwt.sign({ userId: user.id, email: user.email }, process.env.JWT_SECRET || 'your-secret-key', {
       expiresIn: '1h',
     });
 

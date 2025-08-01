@@ -1,37 +1,7 @@
 import { NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import jwt from 'jsonwebtoken';
-import fs from 'fs';
-import path from 'path';
-
-const watchlistsFilePath = path.join('/tmp', 'watchlists.json');
-
-interface Watchlists {
-  [userId: string]: string[];
-}
-
-async function readWatchlists(): Promise<Watchlists> {
-  try {
-    const watchlistsData = await fs.promises.readFile(watchlistsFilePath, 'utf-8');
-    return JSON.parse(watchlistsData);
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      const originalPath = path.join(process.cwd(), 'src', 'lib', 'data', 'watchlists.json');
-      try {
-        const originalData = await fs.promises.readFile(originalPath, 'utf-8');
-        await fs.promises.writeFile(watchlistsFilePath, originalData);
-        return JSON.parse(originalData);
-      } catch (readError) {
-        return {};
-      }
-    }
-    throw error;
-  }
-}
-
-async function writeWatchlists(watchlists: Watchlists): Promise<void> {
-  await fs.promises.writeFile(watchlistsFilePath, JSON.stringify(watchlists, null, 2));
-}
+import { sql } from '@vercel/postgres';
 
 async function getUserIdFromToken(): Promise<number | null> {
   const cookieStore = await cookies();
@@ -40,7 +10,7 @@ async function getUserIdFromToken(): Promise<number | null> {
     return null;
   }
   try {
-    const decoded = jwt.verify(token, 'your-secret-key') as { userId: number };
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-secret-key') as { userId: number };
     return decoded.userId;
   } catch (error) {
     return null;
@@ -53,10 +23,16 @@ export async function GET() {
     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
   }
 
-  const watchlists = await readWatchlists();
-  const userWatchlist = watchlists[userId] || [];
-
-  return NextResponse.json(userWatchlist);
+  try {
+    const { rows } = await sql`
+      SELECT symbol FROM watchlists WHERE user_id = ${userId}
+    `;
+    const symbols = rows.map((row) => row.symbol);
+    return NextResponse.json(symbols);
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
@@ -70,16 +46,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ message: 'Stock symbol is required' }, { status: 400 });
   }
 
-  const watchlists = await readWatchlists();
-  const userWatchlist = watchlists[userId] || [];
+  try {
+    await sql`
+      INSERT INTO watchlists (user_id, symbol)
+      VALUES (${userId}, ${symbol})
+      ON CONFLICT (user_id, symbol) DO NOTHING
+    `;
 
-  if (!userWatchlist.includes(symbol)) {
-    userWatchlist.push(symbol);
-    watchlists[userId] = userWatchlist;
-    await writeWatchlists(watchlists);
+    const { rows } = await sql`
+      SELECT symbol FROM watchlists WHERE user_id = ${userId}
+    `;
+    const symbols = rows.map((row) => row.symbol);
+    return NextResponse.json(symbols);
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
-
-  return NextResponse.json(userWatchlist);
 }
 
 export async function DELETE(request: Request) {
@@ -93,14 +75,18 @@ export async function DELETE(request: Request) {
     return NextResponse.json({ message: 'Stock symbol is required' }, { status: 400 });
   }
 
-  const watchlists = await readWatchlists();
-  let userWatchlist = watchlists[userId] || [];
+  try {
+    await sql`
+      DELETE FROM watchlists WHERE user_id = ${userId} AND symbol = ${symbol}
+    `;
 
-  if (userWatchlist.includes(symbol)) {
-    userWatchlist = userWatchlist.filter((s) => s !== symbol);
-    watchlists[userId] = userWatchlist;
-    await writeWatchlists(watchlists);
+    const { rows } = await sql`
+      SELECT symbol FROM watchlists WHERE user_id = ${userId}
+    `;
+    const symbols = rows.map((row) => row.symbol);
+    return NextResponse.json(symbols);
+  } catch (error) {
+    console.error(error);
+    return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
-
-  return NextResponse.json(userWatchlist);
 }

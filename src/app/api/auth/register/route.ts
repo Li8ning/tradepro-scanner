@@ -1,38 +1,6 @@
 import { NextResponse } from 'next/server';
 import bcrypt from 'bcryptjs';
-import fs from 'fs';
-import path from 'path';
-
-const usersFilePath = path.join('/tmp', 'users.json');
-
-interface User {
-  id: number;
-  email: string;
-  password?: string;
-}
-
-async function readUsers(): Promise<User[]> {
-  try {
-    const usersData = await fs.promises.readFile(usersFilePath, 'utf-8');
-    return JSON.parse(usersData);
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      const originalPath = path.join(process.cwd(), 'src', 'lib', 'data', 'users.json');
-      try {
-        const originalData = await fs.promises.readFile(originalPath, 'utf-8');
-        await fs.promises.writeFile(usersFilePath, originalData);
-        return JSON.parse(originalData);
-      } catch (readError) {
-        return [];
-      }
-    }
-    throw error;
-  }
-}
-
-async function writeUsers(users: User[]) {
-  await fs.promises.writeFile(usersFilePath, JSON.stringify(users, null, 2));
-}
+import { sql } from '@vercel/postgres';
 
 export async function POST(request: Request) {
   try {
@@ -42,28 +10,29 @@ export async function POST(request: Request) {
       return NextResponse.json({ message: 'Email and password are required' }, { status: 400 });
     }
 
-    const users = await readUsers();
+    // Check if user already exists
+    const { rows: existingUsers } = await sql`
+      SELECT email FROM users WHERE email = ${email}
+    `;
 
-    const userExists = users.find((user: User) => user.email === email);
-
-    if (userExists) {
+    if (existingUsers.length > 0) {
       return NextResponse.json({ message: 'User already exists' }, { status: 409 });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser: User = {
-      id: users.length + 1,
-      email,
-      password: hashedPassword,
-    };
-
-    users.push(newUser);
-    await writeUsers(users);
+    await sql`
+      INSERT INTO users (email, password)
+      VALUES (${email}, ${hashedPassword})
+    `;
 
     return NextResponse.json({ message: 'User created successfully' }, { status: 201 });
   } catch (error) {
     console.error(error);
+    // Check for unique constraint violation
+    if ((error as any).code === '23505') {
+      return NextResponse.json({ message: 'User already exists' }, { status: 409 });
+    }
     return NextResponse.json({ message: 'Internal server error' }, { status: 500 });
   }
 }

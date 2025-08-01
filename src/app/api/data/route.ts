@@ -325,6 +325,7 @@ async function fetchStockData(): Promise<any[]> {
           params: {
             function: "TIME_SERIES_DAILY",
             symbol: symbol,
+            outputsize: "full", // Fetch full historical data
             apikey: ALPHA_VANTAGE_API_KEY,
           },
           timeout: 15000 // 15 second timeout
