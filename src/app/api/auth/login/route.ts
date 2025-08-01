@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 
-const usersFilePath = path.join(process.cwd(), 'src', 'lib', 'data', 'users.json');
+const usersFilePath = path.join('/tmp', 'users.json');
 
 interface User {
   id: number;
@@ -18,7 +18,14 @@ async function readUsers(): Promise<User[]> {
     return JSON.parse(usersData);
   } catch (error: any) {
     if (error.code === 'ENOENT') {
-      return [];
+      const originalPath = path.join(process.cwd(), 'src', 'lib', 'data', 'users.json');
+      try {
+        const originalData = await fs.promises.readFile(originalPath, 'utf-8');
+        await fs.promises.writeFile(usersFilePath, originalData);
+        return JSON.parse(originalData);
+      } catch (readError) {
+        return [];
+      }
     }
     throw error;
   }
