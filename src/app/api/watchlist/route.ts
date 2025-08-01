@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import fs from 'fs';
 import path from 'path';
 
-const watchlistsFilePath = path.join(process.cwd(), 'src', 'lib', 'data', 'tmp', 'watchlists.json');
+const watchlistsFilePath = path.join('/tmp', 'watchlists.json');
 
 interface Watchlists {
   [userId: string]: string[];
@@ -19,10 +19,6 @@ async function readWatchlists(): Promise<Watchlists> {
       const originalPath = path.join(process.cwd(), 'src', 'lib', 'data', 'watchlists.json');
       try {
         const originalData = await fs.promises.readFile(originalPath, 'utf-8');
-        const tmpDir = path.dirname(watchlistsFilePath);
-        if (!fs.existsSync(tmpDir)) {
-          await fs.promises.mkdir(tmpDir, { recursive: true });
-        }
         await fs.promises.writeFile(watchlistsFilePath, originalData);
         return JSON.parse(originalData);
       } catch (readError) {

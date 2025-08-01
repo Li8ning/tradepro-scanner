@@ -3,7 +3,7 @@ import bcrypt from 'bcryptjs';
 import fs from 'fs';
 import path from 'path';
 
-const usersFilePath = path.join(process.cwd(), 'src', 'lib', 'data', 'tmp', 'users.json');
+const usersFilePath = path.join('/tmp', 'users.json');
 
 interface User {
   id: number;
@@ -20,10 +20,6 @@ async function readUsers(): Promise<User[]> {
       const originalPath = path.join(process.cwd(), 'src', 'lib', 'data', 'users.json');
       try {
         const originalData = await fs.promises.readFile(originalPath, 'utf-8');
-        const tmpDir = path.dirname(usersFilePath);
-        if (!fs.existsSync(tmpDir)) {
-          await fs.promises.mkdir(tmpDir, { recursive: true });
-        }
         await fs.promises.writeFile(usersFilePath, originalData);
         return JSON.parse(originalData);
       } catch (readError) {
